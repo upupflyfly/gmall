@@ -5,6 +5,7 @@ import java.util
 import java.util.Date
 
 import com.alibaba.fastjson.JSON
+import com.atguigu.bigdata.sparkmall.common.RedisUtil
 import com.atguigu.gmall1018.dw.common.constant.GmallConstant
 import com.atguigu.gmall1018.dw.realtime.bean.StartupLog
 import com.atguigu.gmall1018.dw.realtime.util.MyKafkaUtil
@@ -69,7 +70,7 @@ object StartUpLogApp {
     //把当日访问用户写入redis
     startuplogFilteredDstream.foreachRDD { rdd =>
        rdd.foreachPartition{startupLogItr=>
-         val jedis: Jedis = new Jedis("hadoop1", 6379)
+         val jedis: Jedis = RedisUtil.getJedisClient
          for (startupLog <- startupLogItr ) {
            val key="dau:"+startupLog.logDate
            jedis.sadd(key,startupLog.mid)

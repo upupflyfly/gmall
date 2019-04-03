@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController  //= controller+ responsebody
 public class LoggerController {
 
-    @Autowired
+    @Autowired//自动扫描
     KafkaTemplate<String,String> kafkaTemplate;
 
     private static final  org.slf4j.Logger logger = LoggerFactory.getLogger(LoggerController.class) ;

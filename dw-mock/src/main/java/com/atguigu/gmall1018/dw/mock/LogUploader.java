@@ -11,7 +11,7 @@ public class LogUploader {
         try {
             //不同的日志类型对应不同的URL
 
-            URL url = new URL("http://hadoop101:8080/log");
+            URL url = new URL("http://hadoop101/log");
 //            URL url = new URL("http://127.0.0.1/log");
 
 

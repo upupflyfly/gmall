@@ -51,7 +51,7 @@ object StartUpLogApp {
 
     val startuplogFilteredDstream: DStream[StartupLog] = startupLogDstream.transform { rdd =>
       println(s"过滤前 = ${rdd.count()}")
-      val jedis: Jedis = new Jedis("hadoop1", 6379)
+      val jedis: Jedis = RedisUtil.getJedisClient
       val today: String = new SimpleDateFormat("yyyy-MM-dd").format(new Date)
       val key = "dau:" + today
       val dauSet: util.Set[String] = jedis.smembers(key)

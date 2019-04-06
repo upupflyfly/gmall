@@ -7,6 +7,7 @@ import java.util.Date
 import com.alibaba.fastjson.JSON
 import com.atguigu.bigdata.sparkmall.common.RedisUtil
 import com.atguigu.gmall1018.dw.common.constant.GmallConstant
+import com.atguigu.gmall1018.dw.common.util.MyEsUtil.MyEsUtil
 import com.atguigu.gmall1018.dw.realtime.bean.StartupLog
 import com.atguigu.gmall1018.dw.realtime.util.MyKafkaUtil
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -16,6 +17,8 @@ import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import redis.clients.jedis.Jedis
+
+import scala.collection.mutable.ListBuffer
 
 object StartUpLogApp {
 
@@ -42,11 +45,11 @@ object StartUpLogApp {
 
 
     //根据redis中已有的当日访问用户进行过滤
-//    val startuplogFilteredDstream: DStream[StartupLog] = startupLogDstream.filter { startupLog =>
-//      val jedis: Jedis = new Jedis("hadoop1", 6379)
-//      val key = "dau:" + startupLog.logDate
-//      !jedis.sismember(key, startupLog.mid)
-//    }
+    //    val startuplogFilteredDstream: DStream[StartupLog] = startupLogDstream.filter { startupLog =>
+    //      val jedis: Jedis = RedisUtil.getJedisClient
+    //      val key = "dau:" + startupLog.logDate
+    //      !jedis.sismember(key, startupLog.mid)
+    //    }
 
 
     val startuplogFilteredDstream: DStream[StartupLog] = startupLogDstream.transform { rdd =>
@@ -59,24 +62,31 @@ object StartUpLogApp {
       val filterRdd: RDD[StartupLog] = rdd.filter { startupLog =>
         !dauBC.value.contains(startupLog.mid)
       }
+
       println(s"过滤后= ${filterRdd.count()}")
+
 
       filterRdd
 
     }
 
-
+    val startupLogGroupbyMidDStream: DStream[(String, Iterable[StartupLog])] = startuplogFilteredDstream.map { startupLog => (startupLog.mid, startupLog) }.groupByKey()
+    val distinctDStream: DStream[StartupLog] = startupLogGroupbyMidDStream.flatMap { case (mid, startLogItr) => startLogItr.take(1) }
 
     //把当日访问用户写入redis
-    startuplogFilteredDstream.foreachRDD { rdd =>
-       rdd.foreachPartition{startupLogItr=>
-         val jedis: Jedis = RedisUtil.getJedisClient
-         for (startupLog <- startupLogItr ) {
-           val key="dau:"+startupLog.logDate
-           jedis.sadd(key,startupLog.mid)
-         }
-         jedis.close()
-       }
+    distinctDStream.foreachRDD { rdd =>
+      rdd.foreachPartition { startupLogItr =>
+        val jedis: Jedis = RedisUtil.getJedisClient
+        val listBuffer = new ListBuffer[StartupLog]
+
+        for (startupLog <- startupLogItr) {
+          val key = "dau:" + startupLog.logDate
+          jedis.sadd(key, startupLog.mid)
+          listBuffer += startupLog
+        }
+        MyEsUtil.executeIndexBulk(GmallConstant.ES_INDEX_DAU, listBuffer.toList, null)
+        jedis.close()
+      }
 
     }
 
